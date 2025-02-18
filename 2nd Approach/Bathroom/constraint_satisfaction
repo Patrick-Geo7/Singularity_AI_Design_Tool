@@ -1,0 +1,201 @@
+from ortools.sat.python import cp_model
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import pandas as pd
+
+def optimize_bathroom_layout(room_width, room_length, door_x, door_y, door_width, fixtures):
+    model = cp_model.CpModel()
+    
+    # Decision Variables (X, Y, Rotation)
+    x_vars = {}
+    y_vars = {}
+    rotation_vars = {}
+    
+    for name, fixture in fixtures.items():
+        x_vars[name] = model.NewIntVar(0, room_width, f'{name}_x')
+        y_vars[name] = model.NewIntVar(0, room_length, f'{name}_y')
+        rotation_vars[name] = model.NewIntVar(0, 3, f'{name}_rotation')  # 0, 1, 2, 3 for 0, 90, 180, 270 degrees
+    
+    # Door Orientation and Clearance
+    door_clearance_depth = 30  # Inches of clearance in front of the door
+    if door_x == 0:  # Left wall
+        door_orientation = 'left'
+        clearance_x_start, clearance_x_end = 0, door_clearance_depth
+        clearance_y_start, clearance_y_end = door_y, door_y + door_width
+    elif door_y == 0:  # Bottom wall
+        door_orientation = 'bottom'
+        clearance_x_start, clearance_x_end = door_x, door_x + door_width
+        clearance_y_start, clearance_y_end = 0, door_clearance_depth
+    elif door_x == room_width:  # Right wall
+        door_orientation = 'right'
+        clearance_x_start, clearance_x_end = room_width - door_clearance_depth, room_width
+        clearance_y_start, clearance_y_end = door_y, door_y + door_width
+    elif door_y == room_length:  # Top wall
+        door_orientation = 'top'
+        clearance_x_start, clearance_x_end = door_x, door_x + door_width
+        clearance_y_start, clearance_y_end = room_length - door_clearance_depth, room_length
+    else:
+        raise ValueError("Invalid door position")
+    
+    min_front_clearance = 36  # Minimum front clearance in inches
+    min_sink_front_clearance = 30 # Minimum side clearance
+    toilet_side_clearance = 9  # Minimum toilet side clearance
+    
+    # Fixture Constraints
+    for name, fixture in fixtures.items():
+        rotated_width = model.NewIntVar(0, max(fixture['width'], fixture['depth']), f"{name}_rotated_width")
+        rotated_depth = model.NewIntVar(0, max(fixture['width'], fixture['depth']), f"{name}_rotated_depth")
+        
+        # Rotation Handling
+        for r in range(4):
+            is_rotated = model.NewBoolVar(f"{name}_is_rotated_{r}")
+            model.Add(rotation_vars[name] == r).OnlyEnforceIf(is_rotated)
+            
+            if r == 0:  # Bottom wall
+                model.Add(rotated_width == fixture['width']).OnlyEnforceIf(is_rotated)
+                model.Add(rotated_depth == fixture['depth']).OnlyEnforceIf(is_rotated)
+                model.Add(y_vars[name] == 0).OnlyEnforceIf(is_rotated)
+                model.Add(room_length - rotated_depth >= min_front_clearance).OnlyEnforceIf(is_rotated)
+            elif r == 1:  # Left wall
+                model.Add(rotated_width == fixture['depth']).OnlyEnforceIf(is_rotated)
+                model.Add(rotated_depth == fixture['width']).OnlyEnforceIf(is_rotated)
+                model.Add(x_vars[name] == 0).OnlyEnforceIf(is_rotated)
+                model.Add(room_width - rotated_depth >= min_front_clearance).OnlyEnforceIf(is_rotated)
+            elif r == 2:  # Top wall
+                model.Add(rotated_width == fixture['width']).OnlyEnforceIf(is_rotated)
+                model.Add(rotated_depth == fixture['depth']).OnlyEnforceIf(is_rotated)
+                model.Add(y_vars[name] + rotated_depth == room_length).OnlyEnforceIf(is_rotated)
+                model.Add(room_length - rotated_depth >= min_front_clearance).OnlyEnforceIf(is_rotated)
+            elif r == 3:  # Right wall
+                model.Add(rotated_width == fixture['depth']).OnlyEnforceIf(is_rotated)
+                model.Add(rotated_depth == fixture['width']).OnlyEnforceIf(is_rotated)
+                model.Add(x_vars[name] + rotated_width == room_width).OnlyEnforceIf(is_rotated)
+                model.Add(room_width - rotated_depth >= min_front_clearance).OnlyEnforceIf(is_rotated)
+        
+        # Out-of-Room Bounds
+        model.Add(x_vars[name] + rotated_width <= room_width)
+        model.Add(y_vars[name] + rotated_depth <= room_length)
+
+        
+    # Define Boolean variables for each rotation case
+    is_rotated_0 = model.NewBoolVar(f"{name}_is_rotated_0")  # 0 degrees
+    is_rotated_1 = model.NewBoolVar(f"{name}_is_rotated_1")  # 90 degrees
+    is_rotated_3 = model.NewBoolVar(f"{name}_is_rotated_3")  # 270 degrees
+
+    # Enforce rotation constraints
+    model.Add(rotation_vars[name] == 0).OnlyEnforceIf(is_rotated_0)
+    model.Add(rotation_vars[name] == 1).OnlyEnforceIf(is_rotated_1)
+    model.Add(rotation_vars[name] == 3).OnlyEnforceIf(is_rotated_3)
+
+    # Apply Toilet Side Clearance constraints properly
+    if name == 'Toilet':
+        model.Add(x_vars[name] >= toilet_side_clearance).OnlyEnforceIf(is_rotated_0)
+        model.Add(x_vars[name] + rotated_width <= room_width - toilet_side_clearance).OnlyEnforceIf(is_rotated_0)
+
+        model.Add(y_vars[name] >= toilet_side_clearance).OnlyEnforceIf(is_rotated_1).OnlyEnforceIf(is_rotated_3)
+        model.Add(y_vars[name] + rotated_width <= room_length - toilet_side_clearance).OnlyEnforceIf(is_rotated_1).OnlyEnforceIf(is_rotated_3)
+
+        
+        # Door Clearance
+        no_overlap_door_x = model.NewBoolVar(f"{name}_no_overlap_door_x")
+        no_overlap_door_y = model.NewBoolVar(f"{name}_no_overlap_door_y")
+        model.Add(x_vars[name] + rotated_width <= clearance_x_start).OnlyEnforceIf(no_overlap_door_x)
+        model.Add(x_vars[name] >= clearance_x_end).OnlyEnforceIf(no_overlap_door_x)
+        model.Add(y_vars[name] + rotated_depth <= clearance_y_start).OnlyEnforceIf(no_overlap_door_y)
+        model.Add(y_vars[name] >= clearance_y_end).OnlyEnforceIf(no_overlap_door_y)
+        model.AddBoolOr([no_overlap_door_x, no_overlap_door_y])
+    
+    # No Overlap Between Fixtures
+    for name1, fixture1 in fixtures.items():
+        for name2, fixture2 in fixtures.items():
+            if name1 != name2:
+                no_overlap_x = model.NewBoolVar(f"{name1}_{name2}_no_overlap_x")
+                no_overlap_y = model.NewBoolVar(f"{name1}_{name2}_no_overlap_y")
+                model.Add(x_vars[name1] + fixture1['width'] <= x_vars[name2]).OnlyEnforceIf(no_overlap_x)
+                model.Add(y_vars[name1] + fixture1['depth'] <= y_vars[name2]).OnlyEnforceIf(no_overlap_y)
+                model.AddBoolOr([no_overlap_x, no_overlap_y])
+    
+    # Solve
+    solver = cp_model.CpSolver()
+    status = solver.Solve(model)
+
+    if status in (cp_model.FEASIBLE, cp_model.OPTIMAL):
+        solution = {}
+        for name in fixtures:
+            x = solver.Value(x_vars[name])
+            y = solver.Value(y_vars[name])
+            rotation = solver.Value(rotation_vars[name])
+            solution[name] = {'X': x, 'Y': y, 'Rotation': rotation}
+            
+            # Calculate corners based on rotation
+            width = fixtures[name]['width']
+            depth = fixtures[name]['depth']
+            if rotation in (1, 3):  # 90° or 270°, swap width/depth
+                w, d = depth, width
+            else:  # 0° or 180°
+                w, d = width, depth
+            
+            corners = [
+                (x, y),
+                (x + w, y),
+                (x + w, y + d),
+                (x, y + d)
+            ]
+            print(f"{name} Corners (Rotation={rotation}): {corners}")
+        
+        return solution
+    else:
+        return None
+def visualize_layout(room_width, room_length, door_x, door_y, door_width, fixtures, solution):
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_xlim(0, max(room_length,room_width))
+    ax.set_ylim(0, max(room_length,room_width))
+    ax.set_title("Optimized Bathroom Layout")
+    
+    # Draw Room
+    ax.add_patch(patches.Rectangle((0, 0), room_width, room_length, edgecolor='black', facecolor='none', lw=2))
+    
+    # Draw Door and Clearance
+    door_representation_thickness = 2
+    door_clearance_depth = 30
+    if door_y == 0:  # Bottom
+        ax.add_patch(patches.Rectangle((door_x, 0), door_representation_thickness ,door_width,  edgecolor='blue', facecolor='blue', alpha=0.2))
+    elif door_x == 0:  # Left
+        ax.add_patch(patches.Rectangle((0, door_y),  door_representation_thickness,door_width ,edgecolor='blue', facecolor='blue', alpha=0.2))
+    elif door_x == room_width:  # Right
+        ax.add_patch(patches.Rectangle((room_width - door_representation_thickness, door_y), door_representation_thickness, door_width, alpha=0.2))
+    elif door_y == room_length:  # Top
+        ax.add_patch(patches.Rectangle((door_x, room_length - door_representation_thickness), door_width, door_representation_thickness, alpha=0.2))
+    
+    # Draw Fixtures
+    colors = {'Toilet': 'red', 'Sink': 'green', 'Bathtub': 'purple'}
+    for name, values in solution.items():
+        x, y = values['X'], values['Y']
+        r = values['Rotation']
+        w = fixtures[name]['width'] if r in (0, 2) else fixtures[name]['depth']
+        d = fixtures[name]['depth'] if r in (0, 2) else fixtures[name]['width']
+        ax.add_patch(patches.Rectangle((x, y), w, d, edgecolor=colors[name], facecolor=colors[name], alpha=0.5))
+        ax.text(x + w/2, y + d/2, name, color='white', ha='center', va='center', fontsize=10)
+    
+    plt.xlabel("Width")
+    plt.ylabel("Length")
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.show()
+
+# Load Data and Run
+df = pd.read_csv("H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/Data/preprocessed/X_train.csv")
+for index, row in df.iterrows():
+    room_width = row['Room_Width']
+    room_length = row['Room_Length']
+    door_x, door_y, door_width = row['Door_X_Position'], row['Door_Y_Position'], row['Door_Width']
+    fixtures = {}
+    if row['Has_Toilet']: fixtures["Toilet"] = {"width": 19, "depth": 28}
+    if row['Has_Sink']: fixtures["Sink"] = {"width": 30, "depth": 20}
+    if row['Has_Bathtub']: fixtures["Bathtub"] = {"width": 30, "depth": 60}
+    
+    solution = optimize_bathroom_layout(room_width, room_length, door_x, door_y, door_width, fixtures)
+    if solution:
+        print(f"Bathroom {index} Solution:", solution)
+        visualize_layout(room_width, room_length, door_x, door_y, door_width, fixtures, solution)
+    else:
+        print(f"Bathroom {index}: No valid layout found.")

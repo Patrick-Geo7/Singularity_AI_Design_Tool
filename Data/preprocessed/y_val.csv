@@ -1,0 +1,7 @@
+Toilet_X_Position,Toilet_Y_Position,Toilet_Width,Toilet_Depth,Toilet_Rotation,Sink_X_Position,Sink_Y_Position,Sink_Width,Sink_Depth,Sink_Rotation,Bathtub_X_Position,Bathtub_Y_Position,Bathtub_Width,Bathtub_Depth,Bathtub_Rotation
+40,32,19,28,180,0,39,30,21,180,66,0,36,60,0
+0,9,19,28,90,30,36,36,21,180,0,0,0,0,0
+32,44,19,28,270,39,72,30,21,270,0,0,36,60,90
+59,9,19,28,270,0,0,36,21,90,0,0,0,0,0
+9,0,19,28,0,36,0,30,21,0,0,0,0,0,0
+68,9,19,28,270,75,36,30,21,270,0,6,36,60,0
