@@ -10,15 +10,15 @@ class BathroomConstraints:
         # Minimum clearances in inches
         self.CLEARANCES = {
             'toilet': {
-                'front': 12,  # Minimum front clearance
+                'front': 21,  # Minimum front clearance
                 'side': 9     # Minimum side clearance (9" on both sides)
             },
             'sink': {
-                'front': 12,  # Minimum front clearance
+                'front': 21,  # Minimum front clearance
                 'side': 4     # Minimum side clearance
             },
             'bathtub': {
-                'front': 12,  # Minimum front clearance
+                'front': 21,  # Minimum front clearance
                 'side': 4     # Minimum side clearance
             }
         }
