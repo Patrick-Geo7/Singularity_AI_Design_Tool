@@ -3,6 +3,7 @@ from constraints import BathroomConstraints
 from visualization import BathroomVisualizer
 from feasability_check import check_room_feasibility
 
+
 class BathroomSolver:
     def __init__(self, room_width, room_length, door_x, door_y, door_width, 
                  has_toilet, has_sink, has_bathtub):
@@ -15,62 +16,91 @@ class BathroomSolver:
         self.has_sink = has_sink
         self.has_bathtub = has_bathtub
         self.constraints = BathroomConstraints()
-        self.visualizer = BathroomVisualizer(room_width, room_length, door_x, door_y, door_width,    fixture_images={
-        'toilet': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/toilet.png',
-        'sink': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/sink.png',
-        'bathtub': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/bathtub.png'
-    })
-
-
+        self.visualizer = BathroomVisualizer(room_width, room_length, door_x, door_y, door_width, fixture_images={'toilet': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/toilet.png', 'sink': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/sink.png', 'bathtub': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/bathtub.png '})
 
     def _add_wall_placement_constraints(self, model, pos, walls, fixture_name):
         """Add wall placement constraints for a fixture with rotation consideration."""
         # Get base dimensions
         base_width, base_depth = self.constraints.FIXTURE_DIMENSIONS[fixture_name]
         side_clearance = self.constraints.CLEARANCES[fixture_name]['side']
+
         # Bottom wall placement (0° rotation)
         width_0, depth_0 = self.constraints.get_rotated_dimensions(fixture_name, 0)
-        model.Add(pos['y'] == 0).OnlyEnforceIf(walls['bottom'])
-        model.Add(pos['x'] >= side_clearance).OnlyEnforceIf(walls['bottom'])
-        model.Add(pos['x'] + width_0 <= self.room_width - side_clearance).OnlyEnforceIf(walls['bottom'])
-        # model.Add(pos['y'] + depth_0 <= self.room_length).OnlyEnforceIf(walls['bottom'])
+        if depth_0 <= self.room_length:  # Ensure fixture fits
+            model.Add(pos['y'] == 0).OnlyEnforceIf(walls['bottom'])
+            model.Add(pos['x'] >= side_clearance).OnlyEnforceIf(walls['bottom'])
+            model.Add(pos['x'] + width_0 <= self.room_width - side_clearance).OnlyEnforceIf(walls['bottom'])
+        else:
+            model.Add(walls['bottom'] == 0)  # Disable placement
 
         # Left wall placement (90° rotation)
         width_90, depth_90 = self.constraints.get_rotated_dimensions(fixture_name, 90)
-        model.Add(pos['x'] == 0).OnlyEnforceIf(walls['left'])
-        model.Add(pos['y'] >= side_clearance).OnlyEnforceIf(walls['left'])
-        model.Add(pos['y'] + width_90 <= self.room_length - side_clearance).OnlyEnforceIf(walls['left'])
-        # model.Add(pos['x'] + depth_90 <= self.room_width).OnlyEnforceIf(walls['left'])
+        if depth_90 <= self.room_width:
+            model.Add(pos['x'] == 0).OnlyEnforceIf(walls['left'])
+            model.Add(pos['y'] >= side_clearance).OnlyEnforceIf(walls['left'])
+            model.Add(pos['y'] + width_90 <= self.room_length - side_clearance).OnlyEnforceIf(walls['left'])
+        else:
+            model.Add(walls['left'] == 0)  # Disable placement
 
         # Top wall placement (180° rotation)
         width_180, depth_180 = self.constraints.get_rotated_dimensions(fixture_name, 180)
-        model.Add(pos['y'] + depth_180 == self.room_length).OnlyEnforceIf(walls['top'])
-        model.Add(pos['x'] >= side_clearance).OnlyEnforceIf(walls['top'])
-        model.Add(pos['x'] + width_180 <= self.room_width - side_clearance).OnlyEnforceIf(walls['top'])
-        # model.Add(pos['y'] >= 0).OnlyEnforceIf(walls['top'])
+        if depth_180 <= self.room_length:
+            model.Add(pos['y'] + depth_180 == self.room_length).OnlyEnforceIf(walls['top'])
+            model.Add(pos['x'] >= side_clearance).OnlyEnforceIf(walls['top'])
+            model.Add(pos['x'] + width_180 <= self.room_width - side_clearance).OnlyEnforceIf(walls['top'])
+        else:
+            model.Add(walls['top'] == 0)
 
         # Right wall placement (270° rotation)
         width_270, depth_270 = self.constraints.get_rotated_dimensions(fixture_name, 270)
-        model.Add(pos['x'] + depth_270 == self.room_width).OnlyEnforceIf(walls['right'])
-        model.Add(pos['y'] >= side_clearance).OnlyEnforceIf(walls['right'])
-        model.Add(pos['y'] + width_270 <= self.room_length - side_clearance).OnlyEnforceIf(walls['right'])
-        # model.Add(pos['x'] >= 0).OnlyEnforceIf(walls['right'])
-    def _add_door_clearance_constraints(self,model,fixture,pos):
-        # Add door clearance if provided
-        if all(x is not None for x in [self.door_x, self.door_y, self.door_width]):
-            # Apply door clearance constraints
-            door_clearance = 21  # inches from dataset rules
-            if self.door_y == 0:  # Bottom wall door
-                model.AddImplication(self.door_x <= pos['x'] <= self.door_x + self.door_width)
-                model.Add(pos['y'] >= door_clearance).only_enforce_if()
-            elif self.door_x == 0:  # Left wall door
-                model.Add(pos['x'] >= door_clearance)
-            elif self.door_x == self.room_width:  # Right wall door
-                model.Add(pos['x'] <= self.room_width - door_clearance)
-            elif self.door_y == self.room_length:  # Top wall door
-                model.Add(pos['y'] <= self.room_length - door_clearance)
+        if depth_270 <= self.room_width:
+            model.Add(pos['x'] + depth_270 == self.room_width).OnlyEnforceIf(walls['right'])
+            model.Add(pos['y'] >= side_clearance).OnlyEnforceIf(walls['right'])
+            model.Add(pos['y'] + width_270 <= self.room_length - side_clearance).OnlyEnforceIf(walls['right'])
+        else:
+            model.Add(walls['right'] == 0)  # Disable placement
 
+    def _add_door_clearance_constraints(self, model, fixture, pos):
+        """Enforce door clearance constraints for fixtures based on door position."""
+        if not all(x is not None for x in [self.door_x, self.door_y, self.door_width]):
+            return  # No door information provided
 
+        door_clearance = self.door_width  # Clearance distance should match door width
+        fixture_width, fixture_depth = self.constraints.FIXTURE_DIMENSIONS[fixture]
+
+        is_in_door_range = self._create_door_range_constraint(model, pos,fixture)
+
+        if self.door_y == 0:  # Bottom wall door
+            model.Add(pos['y'] + fixture_depth >= door_clearance).OnlyEnforceIf(is_in_door_range)
+
+        elif self.door_y == self.room_length:  # Top wall door
+            model.Add(pos['y'] <= self.room_length - door_clearance - fixture_depth).OnlyEnforceIf(is_in_door_range)
+
+        elif self.door_x == 0:  # Left wall door
+            model.Add(pos['x'] + fixture_width >= door_clearance).OnlyEnforceIf(is_in_door_range)
+
+        elif self.door_x == self.room_width:  # Right wall door
+            model.Add(pos['x'] <= self.room_width - door_clearance - fixture_width).OnlyEnforceIf(is_in_door_range)
+
+    def _create_door_range_constraint(self, model, pos, fixture):
+        """Create a Boolean variable that checks if a fixture is in the door range."""
+        is_start_side = model.NewBoolVar(f"{fixture}_is_start_side")
+        is_end_side = model.NewBoolVar(f"{fixture}_is_end_side")
+
+        fixture_width, fixture_depth = self.constraints.FIXTURE_DIMENSIONS[fixture]
+
+        if self.door_x in [0, self.room_width]:  # Door on left/right wall
+            model.Add(pos['y'] + fixture_depth >= self.door_y + self.door_width).OnlyEnforceIf(is_start_side)
+            model.Add(pos['y'] <= self.door_y).OnlyEnforceIf(is_end_side)
+
+        elif self.door_y in [0, self.room_length]:  # Door on top/bottom wall
+            model.Add(pos['x'] + fixture_width >= self.door_x + self.door_width).OnlyEnforceIf(is_start_side)
+            model.Add(pos['x'] <= self.door_x).OnlyEnforceIf(is_end_side)
+
+        is_in_door_range = model.NewBoolVar(f"{fixture}_in_door_range")
+        model.AddBoolOr([is_start_side, is_end_side]).OnlyEnforceIf(is_in_door_range)  # FIX: OR instead of AND
+
+        return is_in_door_range
 
     def solve(self):
         """Create and solve the CP-SAT model for bathroom layout."""
@@ -114,14 +144,15 @@ class BathroomSolver:
             pos = positions[fixture]
             walls = wall_bools[fixture]
 
+            # Add door clearance constraints
+            self._add_door_clearance_constraints(model,fixture,pos)
             # Add wall placement constraints considering rotation
             self._add_wall_placement_constraints(model, pos, walls, fixture)
 
-            # Add door clearance constraints
-            self._add_door_clearance_constraints(model,fixture,pos)
+
 
             # Front clearances based on dataset rules
-            front_min = self.constraints.CLEARANCES[fixture]['front']
+            # front_min = self.constraints.CLEARANCES[fixture]['front']
 
             # Add front clearance constraints for each wall
             # for wall, rotation in [('bottom', 0), ('left', 90), ('top', 180), ('right', 270)]:
@@ -179,7 +210,7 @@ class BathroomSolver:
             solution = {}
             for fixture in fixtures:
                 pos = positions[fixture]
-                walls = wall_bools[fixture]
+                # walls = wall_bools[fixture]
 
                 # Get wall placement and corresponding rotation
                 wall = None

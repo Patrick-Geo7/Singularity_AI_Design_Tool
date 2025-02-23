@@ -118,6 +118,8 @@ def main():
 
                 print("\nGenerating visualization...")
                 solver.visualizer.render(solution,index)
+                if index == 3:
+                    solver.visualizer.render_3D_plotly(solution)
                 print(f"Visualization has been saved to 'bathroom_layout_{index}.png'")
                 solved_count += 1
 
