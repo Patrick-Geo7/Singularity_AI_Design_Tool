@@ -181,7 +181,7 @@ def load_and_split_data(filepath: str, output_dir: str = "processed_data"):
         print("Data loaded successfully, shape:", df.shape)
         
         # NEW: Visualize all layouts in the dataset (without denormalizing data)
-        visualize_layouts(df)
+        #visualize_layouts(df)
         
         # Enhanced rotation verification and correction
         def verify_and_correct_rotation(value):
@@ -360,8 +360,8 @@ def verify_data_splits():
 
 if __name__ == "__main__":
     # Update these paths according to your setup
-    input_filepath = "H:\\Shared drives\\AI Design Tool\\00-PG_folder\\03-Furniture AI Model\\Data\preprocessed_dataset.csv"
-    output_directory = "H:\\Shared drives\\AI Design Tool\\00-PG_folder\\03-Furniture AI Model\\Data\\preprocessed"
+    input_filepath = "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/augmented_bathroom_dataset_advanced.csv"
+    output_directory = "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/augmented_bathroom_dataset_advanced/"
     
     try:
         splits = load_and_split_data(input_filepath, output_directory)

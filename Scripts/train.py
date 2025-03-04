@@ -1,176 +1,29 @@
-import pandas as pd
 import torch
-import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader, Dataset
+from torch.utils.data import  DataLoader
+import torch.nn as nn
 import pickle
 import os
 import torch.nn.functional as F
-import numpy as np
-
-class BathroomPlacementModel(nn.Module):
-    """
-    Fixed model with correct tensor dimensions
-    File Location: /src/model/train.py
-    """
-    def __init__(self, input_dim, output_dim):
-        super(BathroomPlacementModel, self).__init__()
-        
-        # Fixed dimensions for fixtures
-        self.fixture_dimensions = {
-            'toilet': torch.tensor([19.0, 28.0]),  # width, depth
-            'sink': torch.tensor([30.0, 20.0]),
-            'bathtub': torch.tensor([30.0, 60.0])
-        }
-        
-        self.shared_features = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.BatchNorm1d(256),
-            nn.Dropout(0.001)
-        )
-        
-        # Separate branches for position and rotation only
-        self.position_branches = nn.ModuleDict({
-            fixture: nn.Sequential(
-                nn.Linear(256, 128), 
-                nn.ReLU(),
-                nn.Linear(128, 64), 
-                nn.ReLU(),
-                nn.Linear(64, 2)  # Predict x, y position
-            ) for fixture in ['toilet', 'sink', 'bathtub']
-        })
-
-        self.rotation_branches = nn.ModuleDict({
-            fixture: nn.Sequential(
-                nn.Linear(256, 128), 
-                nn.ReLU(),
-                nn.Linear(128, 64), 
-                nn.ReLU(),
-                nn.Linear(64, 1),  # Predict rotation
-                nn.Sigmoid()  # Scale output between 0 and 1
-            ) for fixture in ['toilet', 'sink', 'bathtub']
-        })
-        self.spatial_features = nn.Sequential(
-            nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=8, out_channels=16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
+from EarlyStopping import EarlyStopping
+from BathroomDataset import BathroomDataset
+from BathroomPlacementModel import BathroomPlacementModel
 
 
-    def positional_encoding(self,x, max_len=5000):
-        """
-        Applies sinusoidal positional encoding to enhance spatial awareness
-        """
-        pe = torch.zeros(max_len, x.shape[1]).to(x.device)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1).to(x.device)
-        div_term = torch.exp(torch.arange(0, x.shape[1], 2).float() * (-np.log(10000.0) / x.shape[1])).to(x.device)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        
-        return x + pe[:x.shape[0], :]
+def room_boundary_loss(pred_pos, room_width, room_length):
+    batch_size = pred_pos.shape[0]
+    room_width = room_width.expand(batch_size, 1)  # Expand to batch size
+    room_length = room_length.expand(batch_size, 1)
 
-    def forward(self, x):
-        shared = self.shared_features(x)
-        shared = self.positional_encoding(shared)
+    penalty = torch.where(
+        (pred_pos[:, 0] < 0) | (pred_pos[:, 0] > room_width.squeeze(1)) |
+        (pred_pos[:, 1] < 0) | (pred_pos[:, 1] > room_length.squeeze(1)),
+        torch.tensor(10.0, device=pred_pos.device),
+        torch.tensor(0.0, device=pred_pos.device)
+    )
+    return penalty.mean()
 
-        batch_size = x.shape[0]
-        
-        outputs = []
-        fixtures = ['toilet', 'sink', 'bathtub']
-        
-        for fixture in fixtures:
-            # Get position (x, y)
-            pos = self.position_branches[fixture](shared)  # [batch_size, 2]
-            
-            # Get rotation and discretize it
-            rot = self.rotation_branches[fixture](shared) * 360.0  # Scaling sigmoid output
-            rot = self.discretize_rotation(rot)  # [batch_size, 1]
-            
-            # Get fixed dimensions and expand to batch size
-            dims = self.fixture_dimensions[fixture].to(x.device)
-            dims = dims.unsqueeze(0).expand(batch_size, -1)  # [batch_size, 2]
-            
-            # Combine position, dimensions, and rotation
-            # Ensure all tensors have shape [batch_size, n]
-            fixture_output = torch.cat([
-                pos,                    # [batch_size, 2]
-                dims,                   # [batch_size, 2]
-                rot.view(batch_size, 1) # [batch_size, 1]
-            ], dim=1)
-            outputs.append(fixture_output)
-        
-        return torch.cat(outputs, dim=1)
-    
-    def discretize_rotation(self, rot):
-        """
-        Discretize rotation values to valid angles
-        """
-        rot = rot.squeeze(-1)  # Remove extra dimension if present
-        valid_rots = torch.tensor([0., 90., 180., 270.], device=rot.device)
-        rot_expanded = rot.unsqueeze(-1)
-        diffs = torch.abs(rot_expanded - valid_rots)
-        closest_idx = torch.argmin(diffs, dim=-1)
-        return valid_rots[closest_idx]
-
-
-class BathroomDataset(Dataset):
-    """
-    Dataset class without normalization
-    File Location: /src/model/train.py
-    """
-    def __init__(self, x_path, y_path):
-        self.x_df = pd.read_csv(x_path)
-        self.y_df = pd.read_csv(y_path)
-        
-        self.X = self.x_df.values.astype(np.float32)
-        self.y = self.y_df.values.astype(np.float32)
-        
-        self.fixture_dims = {
-            'toilet': {'width': 19.0, 'depth': 28.0},
-            'sink': {'width': 30.0, 'depth': 20.0},
-            'bathtub': {'width': 30.0, 'depth': 60.0}
-        }
-        
-        print(f"Using fixed fixture dimensions: {self.fixture_dims}")
-        print(f"X shape: {self.X.shape}, dtype: {self.X.dtype}")
-        print(f"y shape: {self.y.shape}, dtype: {self.y.dtype}")
-    
-    def __len__(self):
-        return len(self.X)
-    
-    def __getitem__(self, idx):
-        return torch.FloatTensor(self.X[idx]), torch.FloatTensor(self.y[idx])
-    
-    def get_room_dims(self, idx):
-        return {
-            'width': float(self.x_df['Room_Width'].iloc[idx]),
-            'length': float(self.x_df['Room_Length'].iloc[idx])
-        }
-
-class EarlyStopping:
-    def __init__(self, patience=15, min_delta=0.001):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-        
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss > self.best_loss - self.min_delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_loss = val_loss
-            self.counter = 0
-        return self.early_stop
-
-def fixture_specific_loss(outputs, targets, device):
+def fixture_specific_loss(outputs, targets, device, room_width,room_length):
     """
     Enhanced loss function with dimension verification
     File Location: /src/model/train.py
@@ -189,7 +42,7 @@ def fixture_specific_loss(outputs, targets, device):
     
     for idx, fixture in enumerate(['toilet', 'sink', 'bathtub']):
         start_idx = idx * 5
-        
+
         # Extract components
         pred_pos = outputs[:, start_idx:start_idx + 2]
         pred_dims = outputs[:, start_idx + 2:start_idx + 4]
@@ -203,15 +56,16 @@ def fixture_specific_loss(outputs, targets, device):
         losses['position'] += pos_loss
         
         # Rotation loss
-        rot_loss = F.mse_loss(pred_rot, target_rot)
+        rot_loss = nn.CrossEntropyLoss()(pred_rot, target_rot)
         losses['rotation'] += rot_loss
         
         # Dimension verification
-        dims_penalty = F.mse_loss(pred_dims, fixture_dims[fixture].expand(batch_size, -1))
-        losses['dimension'] += dims_penalty
+        # dims_penalty = F.mse_loss(pred_dims, fixture_dims[fixture].expand(batch_size, -1))
+        # losses['dimension'] += dims_penalty
+        boundary_loss = room_boundary_loss(pred_pos,room_width, room_length)
         
         # Combined loss with weights
-        fixture_loss = pos_loss + 0.1 * rot_loss + 10.0 * dims_penalty
+        fixture_loss = pos_loss + 0.1 * rot_loss + boundary_loss
         total_loss += fixture_loss
     
     return total_loss / 3, losses
@@ -238,7 +92,7 @@ def train_model(model, train_loader, val_loader, optimizer, num_epochs, device):
     best_val_loss = float('inf')
     early_stopping = EarlyStopping(patience=15, min_delta=0.001)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
-    
+
     train_losses = []
     val_losses = []
     dimension_errors = []
@@ -255,11 +109,11 @@ def train_model(model, train_loader, val_loader, optimizer, num_epochs, device):
             optimizer.zero_grad()
             outputs = model(inputs)
             
-            loss, component_losses = fixture_specific_loss(outputs, targets, device)
+            loss, component_losses = fixture_specific_loss(outputs, targets, device,inputs[0][0],inputs[0][1])
             loss.backward()
             
             # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
             optimizer.step()
             
@@ -283,7 +137,7 @@ def train_model(model, train_loader, val_loader, optimizer, num_epochs, device):
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
                 
-                loss, _ = fixture_specific_loss(outputs, targets, device)
+                loss, _ = fixture_specific_loss(outputs, targets, device,inputs[0][0],inputs[0][1])
                 val_loss += loss.item()
                 
                 # Verify dimensions for first batch
@@ -333,7 +187,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    base_path = "H:\\Shared drives\\AI Design Tool\\00-PG_folder\\03-Furniture AI Model\\Data\preprocessed"
+    base_path = "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/augmented_bathroom_dataset_advanced"
     
     # Create datasets
     train_dataset = BathroomDataset(
@@ -358,6 +212,7 @@ def main():
     
     # Initialize model
     input_dim = train_dataset.X.shape[1]
+    print(input_dim)
     output_dim = train_dataset.y.shape[1]
     print(f"Model dimensions - Input: {input_dim}, Output: {output_dim}")
     

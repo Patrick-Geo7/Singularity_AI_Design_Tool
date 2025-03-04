@@ -1,7 +1,6 @@
 from ortools.sat.python import cp_model
 from constraints import BathroomConstraints
 from visualization import BathroomVisualizer
-from feasability_check import check_room_feasibility
 
 
 class BathroomSolver:
@@ -16,7 +15,8 @@ class BathroomSolver:
         self.has_sink = has_sink
         self.has_bathtub = has_bathtub
         self.constraints = BathroomConstraints()
-        self.visualizer = BathroomVisualizer(room_width, room_length, door_x, door_y, door_width, fixture_images={'toilet': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/toilet.png', 'sink': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/sink.png', 'bathtub': 'H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/2d_Images/bathtub.png '})
+        self.visualizer = BathroomVisualizer(room_width, room_length, door_x, door_y, door_width,
+                                             fixture_images={'toilet': '2nd Approach/Bathroom/Solver/Assets/2d_Images/toilet.png','sink':'2nd Approach/Bathroom/Solver/Assets/2d_Images/sink.png','bathtub': '2nd Approach/Bathroom/Solver/Assets/2d_Images/bathtub.png'})
 
     def _add_wall_placement_constraints(self, model, pos, walls, fixture_name):
         """Add wall placement constraints for a fixture with rotation consideration."""
@@ -105,9 +105,7 @@ class BathroomSolver:
     def solve(self):
         """Create and solve the CP-SAT model for bathroom layout."""
         model = cp_model.CpModel()
-        if not check_room_feasibility(self):
-            print(f"🚨 Room {self.room_width}x{self.room_length} is too small to fit all fixtures!")
-            return None
+
 
         # Create variables for fixtures
         fixtures = []

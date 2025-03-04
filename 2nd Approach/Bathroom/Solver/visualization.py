@@ -51,7 +51,7 @@ class BathroomVisualizer:
         plt.grid(True, linestyle='--', alpha=0.6)
 
         try:
-            output_path = os.path.abspath(f"H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/2D_Ouput_Samples/bathroom_layout_{index}.png")
+            output_path = f"/media/patrick/Patrick/Singularity_AI_Design_Tool/2nd Approach/Bathroom/Solver/Output_Samples/bathroom_layout_{index}.png"
             plt.savefig(output_path, dpi=300, bbox_inches='tight')
             plt.close()
         except Exception as e:
@@ -156,9 +156,9 @@ class BathroomVisualizer:
 
         # Load and draw fixtures
         fixture_models = {
-            'toilet': "H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/3d_Models/toilet.dae",
-            'sink': "H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/3d_Models/sink.dae",
-            'bathtub': "H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/2nd Approach/Bathroom/Solver/Assets/3d_Models/bathtub.dae"
+            'toilet': "2nd Approach/Bathroom/Solver/Assets/3d_Models/toilet.dae",
+            'sink': "2nd Approach/Bathroom/Solver/Assets/3d_Models/sink.dae",
+            'bathtub': "2nd Approach/Bathroom/Solver/Assets/3d_Models/bathtub.dae"
         }
         for fixture, model_path in fixture_models.items():
             if fixture in solution.keys():

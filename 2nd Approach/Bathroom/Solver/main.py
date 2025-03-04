@@ -45,7 +45,7 @@ def test_simple_case():
 
 def main():
     parser = argparse.ArgumentParser(description='Bathroom Fixture Placement Solver')
-    parser.add_argument('--csv', type=str, default='H:/Shared drives/AI Design Tool/00-PG_folder/03-Furniture AI Model/Data/preprocessed/X_train.csv',
+    parser.add_argument('--csv', type=str, default='Data/preprocessed/X_train.csv',
                       help='Path to input CSV file (default: X_train.csv)')
     parser.add_argument('--index', type=int,
                       help='Specific room index to solve (optional)')
