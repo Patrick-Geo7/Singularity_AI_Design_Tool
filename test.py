@@ -23,9 +23,9 @@ def evaluate_model(model, X_test, y_test):
     with torch.no_grad():
         X_tensor = torch.FloatTensor(X_test.values)
         y_true = y_test.values
-        
+
         y_pred = model(X_tensor).numpy()
-        
+
         # Calculate MSE for each fixture using actual dimensions
         fixture_names = ['Toilet', 'Sink', 'Bathtub']
         for i, fixture in enumerate(fixture_names):
@@ -36,7 +36,7 @@ def evaluate_model(model, X_test, y_test):
             print(y_true[:, i*2:(i+1)*2])
             print(f"Predicted {fixture} positions:")
             print(y_pred[:, i*2:(i+1)*2])
-        
+
         return y_pred
 
 
@@ -64,32 +64,32 @@ def visualize_comparison(y_true, y_pred, room_dims, sample_idx=0):
     File Location: /src/model/test_model.py
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
-    
+
     print(f"\nSample {sample_idx + 1}:")
     print("True values:", y_true[sample_idx])
     print("Predicted values:", y_pred[sample_idx])
-    
+
     # Extract positions and rotations correctly
     true_positions = [
         [y_true[sample_idx, 0], y_true[sample_idx, 1]],  # Toilet
         [y_true[sample_idx, 3], y_true[sample_idx, 4]],  # Sink
         [y_true[sample_idx, 6], y_true[sample_idx, 7]]   # Bathtub
     ]
-    pred_rotations = [normalize_rotation(rot) for rot in 
+    pred_rotations = [normalize_rotation(rot) for rot in
                      [y_pred[sample_idx, 2], y_pred[sample_idx, 5], y_pred[sample_idx, 8]]]
-    true_rotations = [normalize_rotation(rot) for rot in 
+    true_rotations = [normalize_rotation(rot) for rot in
                      [y_true[sample_idx, 2], y_true[sample_idx, 5], y_true[sample_idx, 8]]]
-    
+
     pred_positions = [
         [y_pred[sample_idx, 0], y_pred[sample_idx, 1]],  # Toilet
         [y_pred[sample_idx, 3], y_pred[sample_idx, 4]],  # Sink
         [y_pred[sample_idx, 6], y_pred[sample_idx, 7]]   # Bathtub
     ]
-    
+
     # Plot layouts
     plot_layout(ax1, true_positions, true_rotations, room_dims, "True Layout")
     plot_layout(ax2, pred_positions, pred_rotations, room_dims, "Predicted Layout")
-    
+
     plt.tight_layout()
     plt.show()
 
@@ -99,10 +99,10 @@ def plot_layout(ax, positions, rotations, room_dims, title):
     File Location: /src/model/test.py
     """
     room_width, room_length = room_dims['width'], room_dims['length']
-    
+
     # Draw room boundary
     ax.add_patch(plt.Rectangle((0, 0), room_width, room_length, fill=False, color='black'))
-    
+
     # Define fixtures with normalized rotations
     fixtures = [
         ('Toilet', positions[0], normalize_rotation(rotations[0]), (19, 28), 'red'),
@@ -110,7 +110,7 @@ def plot_layout(ax, positions, rotations, room_dims, title):
         ('Bathtub', positions[2], normalize_rotation(rotations[2]), (30, 60), 'green')
     ]
 
-    
+
     # Plot each fixture
     for name, pos, rotation, (width, depth), color in fixtures:
         # Create rectangle with explicit coordinates
@@ -124,7 +124,7 @@ def plot_layout(ax, positions, rotations, room_dims, title):
             label=name
         )
         ax.add_patch(rect)
-        
+
         # Add label
         ax.text(
             float(pos[0]) + width/2,
@@ -133,7 +133,7 @@ def plot_layout(ax, positions, rotations, room_dims, title):
             ha='center',
             va='center'
         )
-    
+
     # Set plot properties
     ax.set_xlim(-5, room_width + 5)
     ax.set_ylim(-5, room_length + 5)
@@ -141,19 +141,19 @@ def plot_layout(ax, positions, rotations, room_dims, title):
     ax.set_title(title)
     ax.legend()
 
-    
+
     def get_rotated_dims(width, depth, rotation):
         """Get width and depth based on rotation"""
         rot = rotation % 360
         if rot in [90, 270]:
             return depth, width
         return width, depth
-    
+
     # Plot each fixture
     for name, pos, rotation, (width, depth), color in fixtures:
         # Get dimensions based on rotation
         actual_width, actual_depth = get_rotated_dims(width, depth, rotation)
-        
+
         # Create rectangle
         rect = plt.Rectangle(
             (pos[0], pos[1]),
@@ -165,7 +165,7 @@ def plot_layout(ax, positions, rotations, room_dims, title):
             label=name
         )
         ax.add_patch(rect)
-        
+
         # Add label
         ax.text(
             pos[0] + actual_width/2,
@@ -175,7 +175,7 @@ def plot_layout(ax, positions, rotations, room_dims, title):
             va='center',
             bbox=dict(facecolor='white', alpha=0.7)
         )
-    
+
     ax.set_title(title)
     ax.legend()
 
@@ -183,6 +183,72 @@ def plot_layout(ax, positions, rotations, room_dims, title):
     print(f"\n{title} Debug Info:")
     for name, pos, rotation, (width, depth), _ in fixtures:
         print(f"{name}: Position ({pos[0]:.1f}, {pos[1]:.1f}), Rotation {rotation}°")
+
+
+
+import matplotlib.patches as patches
+
+def add_door(ax, room_width, room_height, door_width=8, door_height=15):
+    """Adds a door on the right side of the room."""
+    y_door = (room_height / 2) - (door_height / 2)  # Center door vertically
+    door = patches.Rectangle((room_width, y_door), door_width, door_height, color='brown', label="Door")
+    ax.add_patch(door)
+
+
+def add_window(ax, room_width, room_height, window_width=10, window_height=8):
+    """Adds a door on the right side of the room."""
+    y_window = (room_height / 3) - (window_height / 3)  # Center door vertically
+    window = patches.Rectangle((room_width-y_window, room_height), window_width, window_height, color='grey', label="Window")
+    ax.add_patch(window)
+
+
+def visualize_prediction(y_pred, room_dims, sample_idx=0):
+    """
+    Visualize predicted layout for a bathroom.
+    """
+
+    y_pred = np.array(y_pred, dtype=float).flatten()  # Ensure it's a 1D array
+
+    print(f"\nSample {sample_idx + 1}:")
+    print(f"y_pred shape: {y_pred.shape}, values: {y_pred}")
+
+    if y_pred.shape[0] < 9:
+        print(f"Error: Expected at least 9 values but got {y_pred.shape[0]}")
+        return
+
+    # Use only the first 9 values
+    y_pred = y_pred[:9]
+
+    # Extract positions and rotations
+    pred_positions = [
+        [y_pred[0], y_pred[1]],  # Toilet
+        [y_pred[3], y_pred[4]],  # Sink
+        [y_pred[6], y_pred[7]]  # Bathtub
+    ]
+
+    pred_rotations = [normalize_rotation(rot) for rot in
+                      [y_pred[2], y_pred[5], y_pred[8]]]
+
+    print("Normalized Rotations:", pred_rotations)
+
+    # Plot predicted layout
+    fig, ax = plt.subplots(figsize=(7, 7))
+    plot_layout(ax, pred_positions, pred_rotations, room_dims,
+                title=f"Predicted Layout - Sample {sample_idx + 1}")
+
+    # Add door & window
+    add_door(ax, room_dims['width'], room_dims['length'])
+    add_window(ax, room_dims['width'], room_dims['length'])
+
+    # Set plot limits
+    ax.set_xlim(-1, room_dims['width'] + 1)
+    ax.set_ylim(-1, room_dims['length'] + 1)
+    ax.set_aspect('equal')
+    ax.legend()
+
+    plt.tight_layout()
+    plt.show()
+
 
 
 def main():
@@ -194,13 +260,14 @@ def main():
         print("Starting test process...")
         
         # Define base path
-        base_path = "G:\\Shared drives\\SINGULARITY\\02 - SNG Internal Documents\\06 - SNG Content\\00 - Content\\02 - SNG Content\\06 - Python Scripts\\Under Progress\\standaloneapp\\Datasets\\bathroom_layout8"
-        print(f"Using base path: {base_path}")
+        base_path1 = "G:\\Shared drives\\AI Design Tool\\01-CS_folder\\Data"
+        base_path2 = "G:\\Shared drives\\AI Design Tool\\01-CS_folder\\Scripts"
+        print(f"Usingbase path: {base_path1}")
         
         # Load test data
         print("\nAttempting to load test data...")
-        test_x_path = os.path.join(base_path, 'X_test.csv')
-        test_y_path = os.path.join(base_path, 'y_test.csv')
+        test_x_path = os.path.join(base_path1, 'X_test.csv')
+        test_y_path = os.path.join(base_path1, 'y_test.csv')
         
         if not os.path.exists(test_x_path):
             print(f"Error: X_test.csv not found at {test_x_path}")
@@ -230,7 +297,7 @@ def main():
         
         # Load the trained model
         print("\nLoading trained model...")
-        model_path = os.path.join(base_path, 'best_model.pth')
+        model_path = os.path.join(base_path2, 'best_model.pth')
         if not os.path.exists(model_path):
             print(f"Error: Model file not found at {model_path}")
             return
@@ -254,9 +321,9 @@ def main():
         with torch.no_grad():
             predictions = model(X_test_tensor)
         print("Predictions generated successfully")
-        
+
         # Room dimensions
-        room_dims = {'width': 60, 'length': 96}
+        room_dims = {'width': 80, 'length': 100}
         
         # Visualize comparisons
         print("\nGenerating visualizations...")
