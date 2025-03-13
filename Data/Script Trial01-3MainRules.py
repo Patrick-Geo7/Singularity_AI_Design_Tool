@@ -84,6 +84,23 @@ def create_fixture_polygon(x, y, width, height, angle):
     return rotated_fixture
 
 
+def is_door_position_valid(door_x, door_y, fixtures):
+    """Check if door placement is valid (not behind a fixture & has 30-inch clearance)."""
+    for fixture in fixtures:
+        fx, fy, _, fw, fh, _ = fixture
+        if (
+                (door_x >= fx and door_x <= fx + fw) and  # Door is aligned with fixture
+                (door_y >= fy and door_y <= fy + fh)  # Door overlaps with fixture
+        ):
+            return False  # Door cannot be behind a fixture
+
+        # Check 30-inch clearance in front of the door
+        if (door_x + DOOR_WIDTH >= fx and door_x <= fx + fw) and \
+                (door_y + 30 >= fy and door_y <= fy + fh):
+            return False  # Fixture is within the door's clearance area
+
+    return True
+
 # Function to generate a valid layout
 def generate_valid_layout():
     max_attempts = 1000
@@ -109,13 +126,14 @@ def generate_valid_layout():
         # Bathtub alignment
         if bathtub_angle == 0:  # On bottom wall, facing up
             bathtub_x = random.randint(0, ROOM_WIDTH - bathtub_w)
-            bathtub_y = ROOM_HEIGHT - bathtub_h  # Align to bottom wall
+            bathtub_y = 0  # Align to top wall
+
         elif bathtub_angle == 90:  # On left wall, facing right
             bathtub_x = 0
             bathtub_y = random.randint(0, ROOM_HEIGHT - bathtub_h)
         elif bathtub_angle == 180:  # On top wall, facing down
             bathtub_x = random.randint(0, ROOM_WIDTH - bathtub_w)
-            bathtub_y = 0  # Align to top wall
+            bathtub_y = ROOM_HEIGHT - bathtub_h  # Align to bottom wall
         elif bathtub_angle == 270:  # On right wall, facing left
             bathtub_x = ROOM_WIDTH - bathtub_w
             bathtub_y = random.randint(0, ROOM_HEIGHT - bathtub_h)
@@ -125,13 +143,14 @@ def generate_valid_layout():
         # Toilet alignment
         if toilet_angle == 0:
             toilet_x = random.randint(0, ROOM_WIDTH - toilet_w)
-            toilet_y = ROOM_HEIGHT - toilet_h
+            toilet_y = 0
         elif toilet_angle == 90:
             toilet_x = 0
             toilet_y = random.randint(0, ROOM_HEIGHT - toilet_h)
         elif toilet_angle == 180:
             toilet_x = random.randint(0, ROOM_WIDTH - toilet_w)
-            toilet_y = 0
+            toilet_y = ROOM_HEIGHT - toilet_h
+
         elif toilet_angle == 270:
             toilet_x = ROOM_WIDTH - toilet_w
             toilet_y = random.randint(0, ROOM_HEIGHT - toilet_h)
@@ -139,15 +158,16 @@ def generate_valid_layout():
 
         # Sink alignment
         if sink_angle == 0:
-            sink_x = random.randint(0, ROOM_WIDTH - sink_w)
-            sink_y = ROOM_HEIGHT - sink_h
+            sink_x = random.randint(0,ROOM_HEIGHT - sink_w)
+            sink_y = 0
         elif sink_angle == 90:
             sink_x = 0
             sink_y = random.randint(0, ROOM_HEIGHT - sink_h)
         elif sink_angle == 180:
-            sink_x = random.randint(0,ROOM_HEIGHT - sink_w)
-            sink_y = 0
-        else:  # Default (180 degrees)
+            sink_x = random.randint(0, ROOM_WIDTH - sink_w)
+            sink_y = ROOM_HEIGHT - sink_h
+
+        elif sink_angle == 270:  # Default (180 degrees)
             sink_x = ROOM_WIDTH - sink_w
             sink_y = random.randint(0, ROOM_HEIGHT - sink_h)
         sink_z = 0
@@ -175,16 +195,54 @@ def generate_valid_layout():
            do_fixtures_overlap(toilet_poly, sink_poly):
             attempts += 1
             continue
-            
-        # Valid layout found
+            # Choose a valid door position
+        door_wall = random.choice(['bottom', 'left', 'top', 'right'])
+        if door_wall == 'bottom':
+            door_x = random.randint(0, ROOM_WIDTH - DOOR_WIDTH)
+            door_y = 0
+        elif door_wall == 'top':
+            door_x = random.randint(0, ROOM_WIDTH - DOOR_WIDTH)
+            door_y = ROOM_HEIGHT
+        elif door_wall == 'left':
+            door_x = 0
+            door_y = random.randint(0, ROOM_HEIGHT - DOOR_WIDTH)
+        else:  # Right wall
+            door_x = ROOM_WIDTH
+            door_y = random.randint(0, ROOM_HEIGHT - DOOR_WIDTH)
+
+        # Validate door position
+        if not is_door_position_valid(door_x, door_y,
+                                      [(bathtub_x, bathtub_y, 0, bathtub_w, bathtub_h, bathtub_angle),
+                                       (toilet_x, toilet_y, 0, toilet_w, toilet_h, toilet_angle),
+                                       (sink_x, sink_y, 0, sink_w, sink_h, sink_angle)]):
+            attempts += 1
+            continue
+
+        # Choose a valid window position (not where the door is)
+        window_wall = random.choice([w for w in ['bottom', 'left', 'top', 'right'] if w != door_wall])
+        if window_wall == 'bottom':
+            window_x = random.randint(0, ROOM_WIDTH - WINDOW_WIDTH)
+            window_y = 0
+        elif window_wall == 'top':
+            window_x = random.randint(0, ROOM_WIDTH - WINDOW_WIDTH)
+            window_y = ROOM_HEIGHT
+        elif window_wall == 'left':
+            window_x = 0
+            window_y = random.randint(0, ROOM_HEIGHT - WINDOW_WIDTH)
+        else:  # Right wall
+            window_x = ROOM_WIDTH
+            window_y = random.randint(0, ROOM_HEIGHT - WINDOW_WIDTH)
+
+        # Return the valid layout
         return {
-            'bathtub': (bathtub_x, bathtub_y, bathtub_z, bathtub_w, bathtub_h, bathtub_angle),
-            'toilet': (toilet_x, toilet_y, toilet_z, toilet_w, toilet_h, toilet_angle),
-            'sink': (sink_x, sink_y, sink_z, sink_w, sink_h, sink_angle)
+            'bathtub': (bathtub_x, bathtub_y, 0, bathtub_w, bathtub_h, bathtub_angle),
+            'toilet': (toilet_x, toilet_y, 0, toilet_w, toilet_h, toilet_angle),
+            'sink': (sink_x, sink_y, 0, sink_w, sink_h, sink_angle),
+            'door': (door_x, door_y, 0, DOOR_WIDTH, 'open'),
+            'window': (window_x, window_y, 0, WINDOW_WIDTH)
         }
-        
-    # If we reach here, we couldn't find a valid layout
-    return None
+
+    return None  # No valid layout found
 
 # Function to draw an arrow indicating fixture orientation
 def draw_orientation_arrow(ax, x, y, width, height, angle):
@@ -196,16 +254,16 @@ def draw_orientation_arrow(ax, x, y, width, height, angle):
     arrow_length = min(width, height) * 0.3
     
     # Calculate arrow endpoint based on angle
-    if angle == 0:  # pointing right
+    if angle == 0:  # pointing up
         end_x = center_x
         end_y = center_y + arrow_length
-    elif angle == 90:  # pointing up
+    elif angle == 90:  # pointing right
         end_x = center_x + arrow_length
         end_y = center_y
-    elif angle == 180:  # pointing left
+    elif angle == 180:  # pointing down
         end_x = center_x
         end_y = center_y - arrow_length
-    else:  # angle == 270, pointing down
+    else:  # angle == 270, pointing left
         end_x = center_x - arrow_length
         end_y = center_y
     
@@ -272,9 +330,15 @@ def visualize_layout(layout, layout_num):
     for fixture_name, image_path in fixture_images.items():
         if fixture_name in layout:
             x, y, z, width, height, angle = layout[fixture_name]
-            print(f"x_{fixture_name}={x}, y_{fixture_name}={y}")
+            print(f"x_{fixture_name}={x}, y_{fixture_name}={y},{fixture_name}_height = {height},{fixture_name}_width = {width},{fixture_name}_angle = {angle}")
             try:
                 img = mpimg.imread(image_path)
+                if angle == 0:
+                    img = np.rot90(img, k = 2)
+                elif angle == 90:
+                    img = np.rot90(img, k = 3)
+                elif angle == 270:
+                    img = np.rot90(img, k = 1)
                 ax.imshow(img, extent=(x+width, x, y, y + height), aspect='auto', alpha=1.0)
             except FileNotFoundError:
                 print(f"Error: Image not found for {fixture_name} at {image_path}")
