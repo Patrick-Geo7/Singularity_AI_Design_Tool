@@ -282,9 +282,9 @@ def visualize_layout(layout, layout_num):
 
     # Define fixture images
     fixture_images = {
-        'toilet': "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/Toilet.png",
-        'sink': "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/sink.png",
-        'bathtub': "/media/patrick/Patrick/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/Tub.png"
+        'toilet': "K:/AI Design Tool/02 - Implementation/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/Toilet.png",
+        'sink': "K:/AI Design Tool/02 - Implementation/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/sink.png",
+        'bathtub': "K:/AI Design Tool/02 - Implementation/Singularity_AI_Design_Tool/Data/Assets/2d_Images/New Assets/Tub.png"
     }
     # Ensure door clearance and proper placement
     door_wall = random.choice(['left', 'right', 'top', 'bottom'])
@@ -354,7 +354,7 @@ def visualize_layout(layout, layout_num):
     plt.tight_layout()
 
     # Save the output
-    output_directory = os.path.join(os.getcwd(), "Generated_Layouts_Wednesday_12_03_2D_new_polygons")
+    output_directory = os.path.join(os.getcwd(), "Generated_Layouts_Sunday_23_03_2D_right_bathtub")
     os.makedirs(output_directory, exist_ok=True)
     output_file = os.path.join(output_directory, f'bathroom_layout_{layout_num + 1}.png')
 
@@ -417,8 +417,8 @@ def generate_layouts(num_layouts):
 # Main execution
 if __name__ == "__main__":
     # Set random seed for reproducibility
-    random.seed(42)
-    np.random.seed(42)
+    random.seed(84)
+    np.random.seed(84)
     
     # Generate layouts
     layouts = generate_layouts(NUM_LAYOUTS)
